@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     bedrock_temperature: float = 0.3
 
+    # LLM provider: "bedrock" (AWS) or "anthropic" (Anthropic API, ANTHROPIC_API_KEY).
+    # With "anthropic", bedrock_model_id is mapped to the matching Anthropic model ID
+    # (e.g. us.anthropic.claude-haiku-4-5-20251001-v1:0 -> claude-haiku-4-5-20251001).
+    llm_provider: Literal["bedrock", "anthropic"] = "bedrock"
+    anthropic_api_key: str = ""
+
     # Extended thinking (Claude: budget_tokens, Nova: maxReasoningEffort)
     extended_thinking_enabled: bool = False
     extended_thinking_budget: int = 2048          # Claude models: token budget

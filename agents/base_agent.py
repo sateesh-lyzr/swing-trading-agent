@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -28,6 +29,56 @@ from strands.session.s3_session_manager import S3SessionManager
 from config.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def anthropic_model_id(bedrock_model_id: str) -> str:
+    """Map a Bedrock model/inference-profile ID to the Anthropic API model ID."""
+    model_id = bedrock_model_id.split("anthropic.", 1)[-1]
+    return re.sub(r"-v\d+(:\d+)?$", "", model_id)
+
+
+def build_model(
+    settings: Settings,
+    model_id: str,
+    thinking: dict[str, Any] | None = None,
+    cache: bool = True,
+) -> Any:
+    """Build a Strands model for ``settings.llm_provider``.
+
+    ``model_id`` is always a Bedrock ID; it is mapped for the Anthropic API.
+    """
+    if settings.llm_provider == "anthropic":
+        from strands.models.anthropic import AnthropicModel
+
+        params: dict[str, Any] = {"temperature": settings.bedrock_temperature}
+        max_tokens = 16000
+        if thinking and "thinking" in thinking:
+            # Extended thinking requires temperature 1 and max_tokens > budget.
+            params = {"thinking": thinking["thinking"]}
+            max_tokens = max(max_tokens, thinking["thinking"]["budget_tokens"] + 8000)
+        client_args: dict[str, Any] = {"max_retries": 3, "timeout": 300}
+        if settings.anthropic_api_key:
+            client_args["api_key"] = settings.anthropic_api_key
+        return AnthropicModel(
+            client_args=client_args,
+            model_id=anthropic_model_id(model_id),
+            max_tokens=max_tokens,
+            params=params,
+            **({"cache_config": CacheConfig(strategy="auto")} if cache else {}),
+        )
+
+    return BedrockModel(
+        model_id=model_id,
+        region_name=settings.aws_region,
+        temperature=settings.bedrock_temperature,
+        **({"cache_config": CacheConfig(strategy="auto")} if cache else {}),
+        boto_client_config=BotocoreConfig(
+            read_timeout=300,
+            connect_timeout=10,
+            retries={"max_attempts": 3, "mode": "adaptive"},
+        ),
+        **({"additional_request_fields": thinking} if thinking else {}),
+    )
 
 
 class BaseAgent(ABC):
@@ -79,18 +130,8 @@ class BaseAgent(ABC):
         if self._bedrock_model is not None:
             return self._bedrock_model
 
-        additional_request_fields = self._build_thinking_config()
-        self._bedrock_model = BedrockModel(
-            model_id=self.settings.bedrock_model_id,
-            region_name=self.settings.aws_region,
-            temperature=self.settings.bedrock_temperature,
-            cache_config=CacheConfig(strategy="auto"),
-            boto_client_config=BotocoreConfig(
-                read_timeout=300,
-                connect_timeout=10,
-                retries={"max_attempts": 3, "mode": "adaptive"},
-            ),
-            **({"additional_request_fields": additional_request_fields} if additional_request_fields else {}),
+        self._bedrock_model = build_model(
+            self.settings, self.settings.bedrock_model_id, self._build_thinking_config(),
         )
         return self._bedrock_model
 

@@ -1,0 +1,41 @@
+# Render Blueprint: one background worker running the trading scheduler.
+# Needs a paid instance for the persistent disk; Standard (2 GB) because the
+# EOD screen of ~500 S&P tickers alone peaks at ~330 MB RSS.
+services:
+  - type: worker
+    name: swing-trading-agent
+    runtime: python
+    plan: standard
+    branch: render-anthropic
+    region: virginia
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./render_start.sh
+    disk:
+      name: agent-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BEDROCK_MODEL_ID          # mapped to claude-haiku-4-5-20251001 for the Anthropic API
+        value: us.anthropic.claude-haiku-4-5-20251001-v1:0
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: ALPACA_PAPER
+        value: "true"
+      - key: ALPACA_BASE_URL
+        value: https://paper-api.alpaca.markets
+      - key: ALPACA_DATA_FEED
+        value: iex
+      - key: SESSION_ID
+        value: paper
+      - key: TZ
+        value: America/New_York
+      - key: ENV
+        value: production

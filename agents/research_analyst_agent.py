@@ -69,18 +69,8 @@ class ResearchAnalystAgent(BaseAgent):
         """Research agent uses Haiku 4.5 regardless of PM model setting."""
         if self._bedrock_model is not None:
             return self._bedrock_model
-        from strands.models.bedrock import BedrockModel
-        from botocore.config import Config as BotocoreConfig
-        self._bedrock_model = BedrockModel(
-            model_id=self._RESEARCH_MODEL_ID,
-            region_name=self.settings.aws_region,
-            temperature=self.settings.bedrock_temperature,
-            boto_client_config=BotocoreConfig(
-                read_timeout=300,
-                connect_timeout=10,
-                retries={"max_attempts": 3, "mode": "adaptive"},
-            ),
-        )
+        from agents.base_agent import build_model
+        self._bedrock_model = build_model(self.settings, self._RESEARCH_MODEL_ID, cache=False)
         return self._bedrock_model
 
     def _build_thinking_config(self):

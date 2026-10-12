@@ -228,7 +228,8 @@ class TradingScheduler:
             logger.info(
                 "Scheduled job '%s' — next run: %s",
                 job.name,
-                job.next_run_time,
+                # Pending jobs (scheduler not started yet) have no next_run_time.
+                getattr(job, "next_run_time", None) or job.trigger,
             )
         logger.info(
             "Scheduler starting. Timezone: %s. Jobs: %d.",
